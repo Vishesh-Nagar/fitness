@@ -1,0 +1,12 @@
+# Docker
+.env
+docker-compose.override.yml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
