@@ -22,6 +22,26 @@ api.interceptors.request.use((config) => {
 );
 
 
-export const getActivities = () => api.get('/activities');
-export const addActivity = (activity) => api.post('/activities', activity);
-export const getActivityDetail = (id) => api.get(`/recommendations/activity/${id}`);
+// TEMPORARY: Mock API endpoints for Preview Mode
+// export const getActivities = () => api.get('/activities');
+// export const addActivity = (activity) => api.post('/activities', activity);
+// export const getActivityDetail = (id) => api.get(`/recommendations/activity/${id}`);
+
+export const getActivities = () => Promise.resolve({
+    data: [
+        { id: 1, type: "Running", distance: 5.2, duration: 30, date: "2024-06-10" },
+        { id: 2, type: "Cycling", distance: 15.0, duration: 45, date: "2024-06-09" },
+        { id: 3, type: "Swimming", distance: 1.0, duration: 20, date: "2024-06-08" }
+    ]
+});
+
+export const addActivity = (activity) => Promise.resolve({
+    data: { id: Date.now(), ...activity }
+});
+
+export const getActivityDetail = (id) => Promise.resolve({
+    data: [
+        { id: 101, suggestion: "Based on this activity, you might enjoy a lighter recovery session tomorrow." },
+        { id: 102, suggestion: "Great job! Don't forget to stretch and stay hydrated." }
+    ]
+});

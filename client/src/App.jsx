@@ -1,79 +1,41 @@
-import { Box, Button, Typography } from "@mui/material";
-import { useContext, useEffect, useState } from "react";
-import { AuthContext } from "react-oauth2-code-pkce";
-import { useDispatch } from "react-redux";
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from "react-router";
-import { setCredentials } from "./store/authSlice";
-import ActivityForm from "./components/ActivityForm";
-import ActivityList from "./components/ActivityList";
-import ActivityDetail from "./components/ActivityDetail";
-
-const ActvitiesPage = () => {
-  return (<Box sx={{ p: 2, border: '1px dashed grey' }}>
-    <ActivityForm onActivitiesAdded = {() => window.location.reload()} />
-    <ActivityList />
-  </Box>);
-}
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/layout/ProtectedRoute';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import DashboardPage from './pages/DashboardPage';
+import ActivityDetailPage from './pages/ActivityDetailPage';
+import './index.css';
 
 function App() {
-  const { token, tokenData, logIn, logOut, isAuthenticated } = useContext(AuthContext);
-  const dispatch = useDispatch();
-  const [authReady, setAuthReady] = useState(false);
-  
-  useEffect(() => {
-    if (token) {
-      dispatch(setCredentials({token, user: tokenData}));
-      setAuthReady(true);
-    }
-  }, [token, tokenData, dispatch]);
-
   return (
-    <Router>
-      {!token ? (
-      <Box
-      sx={{
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-      }}
-    >
-      <Typography variant="h4" gutterBottom>
-        Welcome to the Fitness Tracker App
-      </Typography>
-      <Typography variant="subtitle1" sx={{ mb: 3 }}>
-        Please login to access your activities
-      </Typography>
-      <Button variant="contained" color="primary" size="large" onClick={() => {
-                logIn();
-              }}>
-        LOGIN
-      </Button>
-    </Box>
-            ) : (
-              // <div>
-              //   <pre>{JSON.stringify(tokenData, null, 2)}</pre>
-              //   <pre>{JSON.stringify(token, null, 2)}</pre>
-              // </div>
-
-             
-
-              <Box sx={{ p: 2, border: '1px dashed grey' }}>
-                 <Button variant="contained" color="secondary" onClick={logOut}>
-                  Logout
-                </Button>
-              <Routes>
-                <Route path="/activities" element={<ActvitiesPage />}/>
-                <Route path="/activities/:id" element={<ActivityDetail />}/>
-
-                <Route path="/" element={token ? <Navigate to="/activities" replace/> : <div>Welcome! Please Login.</div>} />
-              </Routes>
-            </Box>
-            )}
-    </Router>
-  )
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/activities/:id"
+            element={
+              <ProtectedRoute>
+                <ActivityDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;
