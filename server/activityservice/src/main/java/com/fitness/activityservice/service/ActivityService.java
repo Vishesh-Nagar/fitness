@@ -4,7 +4,9 @@ import com.fitness.activityservice.ActivityRepository;
 import com.fitness.activityservice.config.KafkaTopicConfig;
 import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
+import com.fitness.activityservice.exception.ActivityNotFoundException;
 import com.fitness.activityservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -12,6 +14,7 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -22,8 +25,9 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final UserValidationService userValidationService;
-    private final KafkaTemplate<String, Activity> kafkaTemplate;
+    private final KafkaTemplate<String, ActivityEvent> kafkaTemplate;
 
+    @SuppressWarnings("null")
     public ActivityResponse trackActivity(ActivityRequest request) {
         boolean isValidUser = userValidationService.validateUser(request.getUserId());
         if (!isValidUser) {
@@ -39,13 +43,24 @@ public class ActivityService {
                 .additionalMetrics(request.getAdditionalMetrics())
                 .build();
 
-        Activity savedActivity = activityRepository.save(activity);
+        Activity savedActivity = Objects.requireNonNull(activityRepository.save(activity), "Saved activity must not be null");
 
-        // Publish to Kafka.
-        CompletableFuture<SendResult<String, Activity>> future =
+        // Build the shared ActivityEvent and publish to Kafka
+        ActivityEvent event = ActivityEvent.builder()
+                .activityId(savedActivity.getId())
+                .userId(savedActivity.getUserId())
+                .type(savedActivity.getType() != null ? savedActivity.getType().name() : null)
+                .duration(savedActivity.getDuration())
+                .caloriesBurned(savedActivity.getCaloriesBurned())
+                .startTime(savedActivity.getStartTime())
+                .createdAt(savedActivity.getCreatedAt())
+                .additionalMetrics(savedActivity.getAdditionalMetrics())
+                .build();
+
+        CompletableFuture<SendResult<String, ActivityEvent>> future =
                 kafkaTemplate.send(KafkaTopicConfig.ACTIVITY_EVENTS_TOPIC,
-                        savedActivity.getUserId(),
-                        savedActivity);
+                        Objects.requireNonNull(event.getUserId(), "userId must not be null"),
+                        event);
 
         future.whenComplete((result, ex) -> {
             if (ex != null) {
@@ -84,8 +99,8 @@ public class ActivityService {
     }
 
     public ActivityResponse getActivityById(String activityId) {
-        return activityRepository.findById(activityId)
+        return activityRepository.findById(Objects.requireNonNull(activityId, "activityId must not be null"))
                 .map(this::mapToResponse)
-                .orElseThrow(() -> new RuntimeException("Activity not found: " + activityId));
+                .orElseThrow(() -> new ActivityNotFoundException(activityId));
     }
 }

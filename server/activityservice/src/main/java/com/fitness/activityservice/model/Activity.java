@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @Document(collection = "activities")
+@CompoundIndex(def = "{'userId': 1, 'startTime': -1}")  // Optimises analytics queries
 @Data
 @Builder
 @AllArgsConstructor
