@@ -1,22 +1,26 @@
-# ── Stage 1: build ──────────────────────────────────────────────
-FROM eclipse-temurin:23-jdk-alpine AS builder
+# Build context must be server/
+# docker build -f userservice/Dockerfile -t fitness-userservice .
+FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -q
 
-COPY src ./src
-RUN ./mvnw package -DskipTests -q
+COPY common-lib/pom.xml ./common-lib/pom.xml
+COPY common-lib/src ./common-lib/src
 
-# ── Stage 2: runtime ────────────────────────────────────────────
-FROM eclipse-temurin:23-jre-alpine
+COPY userservice/pom.xml ./userservice/pom.xml
+COPY userservice/src ./userservice/src
+
+RUN chmod +x mvnw && ./mvnw package -pl common-lib,userservice -am -DskipTests -q
+
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-COPY --from=builder /app/target/*.jar app.jar
+COPY --from=builder /app/userservice/target/*.jar app.jar
 
 EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "app.jar"]

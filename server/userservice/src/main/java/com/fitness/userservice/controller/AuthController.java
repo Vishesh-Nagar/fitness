@@ -9,10 +9,14 @@ import com.fitness.userservice.repository.UserRepository;
 import com.fitness.userservice.security.JwtUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.Duration;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -22,8 +26,9 @@ public class AuthController {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final StringRedisTemplate redisTemplate;
 
-    // Create new  account
+    // Create new account
     @PostMapping("/register")
     public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -56,5 +61,22 @@ public class AuthController {
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail());
         return ResponseEntity.ok(new AuthResponse(token, user.getId(), user.getEmail()));
+    }
+
+    // Logout — blocklist token in Redis until it expires
+    @SuppressWarnings("null")
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader("X-User-ID") String userId) {
+        String token = Objects.requireNonNull(authHeader.replace("Bearer ", ""), "token must not be null");
+        long ttlMs = jwtUtil.getRemainingTtlMillis(token);
+        if (ttlMs > 0) {
+            redisTemplate.opsForValue().set(
+                    "blocklist:" + token,
+                    userId,
+                    Objects.requireNonNull(Duration.ofMillis(ttlMs), "duration must not be null"));
+        }
+        return ResponseEntity.noContent().build();
     }
 }

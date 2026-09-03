@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+
 @Service
 @Slf4j
 public class UserService {
@@ -18,7 +20,8 @@ public class UserService {
     public UserResponse register(RegisterRequest request) {
 
         if (repository.existsByEmail(request.getEmail())) {
-            User existingUser = repository.findByEmail(request.getEmail());
+            User existingUser = repository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
             UserResponse userResponse = new UserResponse();
             userResponse.setId(existingUser.getId());
             userResponse.setKeycloakId(existingUser.getKeycloakId());
@@ -34,7 +37,6 @@ public class UserService {
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(request.getPassword());
-        user.setKeycloakId(request.getKeycloakId());
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
 
@@ -53,7 +55,7 @@ public class UserService {
     }
 
     public UserResponse getUserProfile(String userId) {
-        User user = repository.findById(userId)
+        User user = repository.findById(Objects.requireNonNull(userId, "userId must not be null"))
                 .orElseThrow(() -> new RuntimeException("User Not Found"));
 
         UserResponse userResponse = new UserResponse();
