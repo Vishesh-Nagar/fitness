@@ -5,10 +5,11 @@
 ##   1. Fork this repo on GitHub
 ##   2. Connect to Render → New → Blueprint
 ##   3. Set the secret env vars listed below in the Render dashboard
-##      (JWT_SECRET_KEY, GEMINI_API_KEY, POSTGRES_PASSWORD, etc.)
+##      (JWT_SECRET_KEY, GEMINI_API_KEY, etc.)
 ##
-## Note: MongoDB and Kafka are expected to be provisioned on Aiven.io
-## and passed in via the *_URI env vars below.
+## Note: PostgreSQL + Redis are provisioned natively by Render (auto-wired).
+##       MongoDB → MongoDB Atlas (free tier, https://www.mongodb.com/atlas)
+##       Kafka   → Upstash Kafka  (free tier, https://upstash.com)
 
 services:
 
@@ -54,9 +55,15 @@ services:
       - key: JWT_SECRET_KEY
         sync: false   # Set in Render dashboard (secret)
       - key: REDIS_HOST
-        sync: false
+        fromService:
+          name: fitness-redis
+          type: redis
+          property: host
       - key: REDIS_PORT
-        value: "6379"
+        fromService:
+          name: fitness-redis
+          type: redis
+          property: port
     healthCheckPath: /actuator/health
 
   # ─────────────────────── User Service ───────────────────────
@@ -73,17 +80,29 @@ services:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: https://fitness-eureka.onrender.com/eureka/
       - key: SPRING_DATASOURCE_URL
-        sync: false   # Aiven PostgreSQL connection string
+        fromDatabase:
+          name: fitness-postgres
+          property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
-        sync: false
+        fromDatabase:
+          name: fitness-postgres
+          property: user
       - key: SPRING_DATASOURCE_PASSWORD
-        sync: false
+        fromDatabase:
+          name: fitness-postgres
+          property: password
       - key: JWT_SECRET_KEY
         sync: false
       - key: REDIS_HOST
-        sync: false
+        fromService:
+          name: fitness-redis
+          type: redis
+          property: host
       - key: REDIS_PORT
-        value: "6379"
+        fromService:
+          name: fitness-redis
+          type: redis
+          property: port
     healthCheckPath: /actuator/health
 
   # ─────────────────────── Activity Service ───────────────────────
@@ -100,9 +119,15 @@ services:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: https://fitness-eureka.onrender.com/eureka/
       - key: SPRING_DATA_MONGODB_URI
-        sync: false   # Aiven MongoDB connection string
+        sync: false   # MongoDB Atlas connection string
       - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
-        sync: false   # Aiven Kafka bootstrap servers
+        sync: false   # Upstash Kafka bootstrap servers
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: SCRAM-SHA-256
+      - key: KAFKA_SASL_JAAS_CONFIG
+        sync: false   # Upstash Kafka JAAS config string
       - key: JWT_SECRET_KEY
         sync: false
     healthCheckPath: /actuator/health
@@ -121,9 +146,15 @@ services:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: https://fitness-eureka.onrender.com/eureka/
       - key: SPRING_DATA_MONGODB_URI
-        sync: false
+        sync: false   # MongoDB Atlas connection string
       - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
-        sync: false
+        sync: false   # Upstash Kafka bootstrap servers
+      - key: KAFKA_SECURITY_PROTOCOL
+        value: SASL_SSL
+      - key: KAFKA_SASL_MECHANISM
+        value: SCRAM-SHA-256
+      - key: KAFKA_SASL_JAAS_CONFIG
+        sync: false   # Upstash Kafka JAAS config string
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_API_URL
@@ -152,3 +183,19 @@ services:
         value: https://fitness-gateway.onrender.com/api
       - key: VITE_WS_HOST
         value: https://fitness-aiservice.onrender.com
+
+  # ─────────────────────── Redis ───────────────────────
+
+  - type: redis
+    name: fitness-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+
+  # ─────────────────────── PostgreSQL ───────────────────────
+
+  - name: fitness-postgres
+    plan: free
+    databaseName: fitness_user_db
+    user: postgres

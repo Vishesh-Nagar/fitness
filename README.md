@@ -227,14 +227,37 @@ npm run build   # Build for production
 npm run preview # Preview production build
 ```
 
-## Contributing
+## Deployment
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+### Render Blueprint
+This project is configured for 1-click deployment on [Render](https://render.com) using `render.yaml`.
+PostgreSQL and Redis are provisioned natively by Render.
 
-## License
+1. Fork/push this repository to GitHub.
+2. Go to Render Dashboard → **New** → **Blueprint**.
+3. Connect your repository. Render will automatically detect the `render.yaml` configuration.
+4. Provide the required environment variables (secrets) when prompted.
 
-This project is part of a learning course. Please refer to the original course materials for usage policies.
+### External Prerequisites
+Before deploying to Render, set up the following external services:
+
+#### 1. MongoDB Atlas (Free Tier)
+Create a cluster on [MongoDB Atlas](https://www.mongodb.com/atlas). Get the connection string URI.
+- **Activity Service DB**: `fitnessactivity`
+- **AI Service DB**: `fitnessrecommendation`
+
+#### 2. Aiven Kafka (Free Tier)
+Create a Kafka service on [Aiven](https://aiven.io). Enable SASL authentication.
+Create a topic named `activity-updates` (1 partition).
+Build the JAAS config string using your Aiven credentials:
+`org.apache.kafka.common.security.scram.ScramLoginModule required username="avnadmin" password="<password>";`
+
+### Secret Environment Variables
+You will need to provide these variables in the Render dashboard during deployment. See `.env.example` for details.
+
+- `JWT_SECRET_KEY` (Generate: `openssl rand -hex 64`)
+- `GEMINI_API_KEY` (From Google AI Studio)
+- `GEMINI_API_URL`
+- `SPRING_DATA_MONGODB_URI` (Set separately for Activity and AI services)
+- `SPRING_KAFKA_BOOTSTRAP_SERVERS` (Aiven URI)
+- `KAFKA_SASL_JAAS_CONFIG` (Aiven JAAS string)
