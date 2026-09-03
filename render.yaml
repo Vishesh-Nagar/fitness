@@ -19,7 +19,7 @@ services:
     name: fitness-configserver
     runtime: docker
     dockerfilePath: ./server/configserver/Dockerfile
-    dockerContext: ./server/configserver
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_PROFILES_ACTIVE
@@ -32,7 +32,7 @@ services:
     name: fitness-eureka
     runtime: docker
     dockerfilePath: ./server/eureka/Dockerfile
-    dockerContext: ./server/eureka
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_CONFIG_IMPORT
@@ -45,7 +45,7 @@ services:
     name: fitness-gateway
     runtime: docker
     dockerfilePath: ./server/gateway/Dockerfile
-    dockerContext: ./server/gateway
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_CONFIG_IMPORT
@@ -72,7 +72,7 @@ services:
     name: fitness-userservice
     runtime: docker
     dockerfilePath: ./server/userservice/Dockerfile
-    dockerContext: ./server/userservice
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_CONFIG_IMPORT
@@ -111,7 +111,7 @@ services:
     name: fitness-activityservice
     runtime: docker
     dockerfilePath: ./server/activityservice/Dockerfile
-    dockerContext: ./server/activityservice
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_CONFIG_IMPORT
@@ -138,7 +138,7 @@ services:
     name: fitness-aiservice
     runtime: docker
     dockerfilePath: ./server/aiservice/Dockerfile
-    dockerContext: ./server/aiservice
+    dockerContext: ./server
     plan: free
     envVars:
       - key: SPRING_CONFIG_IMPORT
