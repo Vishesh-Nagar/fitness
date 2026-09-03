@@ -1,0 +1,154 @@
+## Render.com infrastructure-as-code spec.
+## Docs: https://render.com/docs/blueprint-spec
+##
+## Usage:
+##   1. Fork this repo on GitHub
+##   2. Connect to Render → New → Blueprint
+##   3. Set the secret env vars listed below in the Render dashboard
+##      (JWT_SECRET_KEY, GEMINI_API_KEY, POSTGRES_PASSWORD, etc.)
+##
+## Note: MongoDB and Kafka are expected to be provisioned on Aiven.io
+## and passed in via the *_URI env vars below.
+
+services:
+
+  # ─────────────────────── Config Server ───────────────────────
+
+  - type: web
+    name: fitness-configserver
+    runtime: docker
+    dockerfilePath: ./server/configserver/Dockerfile
+    dockerContext: ./server/configserver
+    plan: free
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: native
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── Eureka ───────────────────────
+
+  - type: web
+    name: fitness-eureka
+    runtime: docker
+    dockerfilePath: ./server/eureka/Dockerfile
+    dockerContext: ./server/eureka
+    plan: free
+    envVars:
+      - key: SPRING_CONFIG_IMPORT
+        value: optional:configserver:https://fitness-configserver.onrender.com
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── API Gateway ───────────────────────
+
+  - type: web
+    name: fitness-gateway
+    runtime: docker
+    dockerfilePath: ./server/gateway/Dockerfile
+    dockerContext: ./server/gateway
+    plan: free
+    envVars:
+      - key: SPRING_CONFIG_IMPORT
+        value: optional:configserver:https://fitness-configserver.onrender.com
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: https://fitness-eureka.onrender.com/eureka/
+      - key: JWT_SECRET_KEY
+        sync: false   # Set in Render dashboard (secret)
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── User Service ───────────────────────
+
+  - type: web
+    name: fitness-userservice
+    runtime: docker
+    dockerfilePath: ./server/userservice/Dockerfile
+    dockerContext: ./server/userservice
+    plan: free
+    envVars:
+      - key: SPRING_CONFIG_IMPORT
+        value: optional:configserver:https://fitness-configserver.onrender.com
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: https://fitness-eureka.onrender.com/eureka/
+      - key: SPRING_DATASOURCE_URL
+        sync: false   # Aiven PostgreSQL connection string
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── Activity Service ───────────────────────
+
+  - type: web
+    name: fitness-activityservice
+    runtime: docker
+    dockerfilePath: ./server/activityservice/Dockerfile
+    dockerContext: ./server/activityservice
+    plan: free
+    envVars:
+      - key: SPRING_CONFIG_IMPORT
+        value: optional:configserver:https://fitness-configserver.onrender.com
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: https://fitness-eureka.onrender.com/eureka/
+      - key: SPRING_DATA_MONGODB_URI
+        sync: false   # Aiven MongoDB connection string
+      - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+        sync: false   # Aiven Kafka bootstrap servers
+      - key: JWT_SECRET_KEY
+        sync: false
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── AI Service ───────────────────────
+
+  - type: web
+    name: fitness-aiservice
+    runtime: docker
+    dockerfilePath: ./server/aiservice/Dockerfile
+    dockerContext: ./server/aiservice
+    plan: free
+    envVars:
+      - key: SPRING_CONFIG_IMPORT
+        value: optional:configserver:https://fitness-configserver.onrender.com
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: https://fitness-eureka.onrender.com/eureka/
+      - key: SPRING_DATA_MONGODB_URI
+        sync: false
+      - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_URL
+        sync: false
+    healthCheckPath: /actuator/health
+
+  # ─────────────────────── React Frontend ───────────────────────
+
+  - type: web
+    name: fitness-client
+    runtime: static
+    buildCommand: cd client && npm ci && npm run build
+    staticPublishPath: ./client/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_MOCK_MODE
+        value: "false"
+      - key: VITE_API_URL
+        value: https://fitness-gateway.onrender.com/api
+      - key: VITE_WS_HOST
+        value: https://fitness-aiservice.onrender.com
