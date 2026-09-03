@@ -3,14 +3,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-
-COPY common-lib/pom.xml ./common-lib/pom.xml
-COPY common-lib/src ./common-lib/src
-
-COPY userservice/pom.xml ./userservice/pom.xml
-COPY userservice/src ./userservice/src
+COPY . .
 
 RUN chmod +x mvnw && ./mvnw package -pl common-lib,userservice -am -DskipTests -q
 

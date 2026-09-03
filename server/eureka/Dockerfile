@@ -3,10 +3,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-COPY eureka/pom.xml ./eureka/pom.xml
-COPY eureka/src ./eureka/src
+COPY . .
 
 RUN chmod +x mvnw && ./mvnw package -pl eureka -am -DskipTests -q
 

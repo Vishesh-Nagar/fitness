@@ -3,11 +3,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-
-COPY gateway/pom.xml ./gateway/pom.xml
-COPY gateway/src ./gateway/src
+COPY . .
 
 RUN chmod +x mvnw && ./mvnw package -pl gateway -am -DskipTests -q
 

@@ -3,10 +3,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-COPY configserver/pom.xml ./configserver/pom.xml
-COPY configserver/src ./configserver/src
+COPY . .
 
 RUN chmod +x mvnw && ./mvnw package -pl configserver -am -DskipTests -q
 

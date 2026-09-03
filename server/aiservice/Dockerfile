@@ -3,14 +3,7 @@
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-
-COPY common-lib/pom.xml ./common-lib/pom.xml
-COPY common-lib/src ./common-lib/src
-
-COPY aiservice/pom.xml ./aiservice/pom.xml
-COPY aiservice/src ./aiservice/src
+COPY . .
 
 RUN chmod +x mvnw && ./mvnw package -pl common-lib,aiservice -am -DskipTests -q
 

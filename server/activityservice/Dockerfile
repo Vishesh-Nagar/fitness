@@ -5,18 +5,8 @@ FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
 # Copy Maven wrapper and parent pom first (cache-friendly)
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
+COPY . .
 
-# Copy common-lib (needed before building activityservice)
-COPY common-lib/pom.xml ./common-lib/pom.xml
-COPY common-lib/src ./common-lib/src
-
-# Copy activityservice source
-COPY activityservice/pom.xml ./activityservice/pom.xml
-COPY activityservice/src ./activityservice/src
-
-# Build only common-lib + activityservice (skip other modules)
 RUN chmod +x mvnw && ./mvnw package -pl common-lib,activityservice -am -DskipTests -q
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
