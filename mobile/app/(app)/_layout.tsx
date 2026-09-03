@@ -1,6 +1,6 @@
 import { Tabs, Redirect } from 'expo-router';
 import { useSelector } from 'react-redux';
-import { BarChart2, User } from 'lucide-react-native';
+import { BarChart2, User, PlusCircle } from 'lucide-react-native';
 import { RootState } from '@/store/store';
 import { Colors } from '@/constants/theme';
 
@@ -32,6 +32,15 @@ export default function AppLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
             <BarChart2 size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="log-activity"
+        options={{
+          title: 'Log',
+          tabBarIcon: ({ color, size }) => (
+            <PlusCircle size={size} color={color} />
           ),
         }}
       />
