@@ -2,9 +2,26 @@ networks:
   fitness-net:
     driver: bridge
 
+# ─────────────────────── YAML Anchors (DRY config) ───────────────────────
+
+x-common-env: &common-env
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  GEMINI_API_URL: ${GEMINI_API_URL:-}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  REDIS_HOST: ${REDIS_HOST:-fitness-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+x-jvm-healthcheck: &jvm-healthcheck
+  interval: 15s
+  timeout: 5s
+  retries: 5
+  start_period: 60s   # JVM services are slow to start on first run
+
 services:
 
-  # ─────────────────────── Infrastructure ───────────────────────
+  # ─────────────────────── Infrastructure (default profile) ───────────────────────
 
   mongodb:
     image: mongo:6.0
@@ -33,8 +50,8 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_DB: fitness_user_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin@123
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin@123}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -69,7 +86,23 @@ services:
       timeout: 10s
       retries: 5
 
-  # ─────────────────────── Spring Cloud Config ───────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fitness-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - fitness-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─────────────────────── Spring Cloud Config (default profile) ───────────────────────
 
   configserver:
     build:
@@ -83,11 +116,9 @@ services:
       - fitness-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8888/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      <<: *jvm-healthcheck
 
-  # ─────────────────────── Service Discovery ───────────────────────
+  # ─────────────────────── Service Discovery (default profile) ───────────────────────
 
   eureka:
     build:
@@ -106,11 +137,9 @@ services:
       - fitness-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8761/actuator/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      <<: *jvm-healthcheck
 
-  # ─────────────────────── API Gateway ───────────────────────
+  # ─────────────────────── API Gateway (backend profile) ───────────────────────
 
   gateway:
     build:
@@ -118,6 +147,7 @@ services:
       dockerfile: Dockerfile
     container_name: fitness-gateway
     restart: unless-stopped
+    profiles: ["backend", "full"]
     ports:
       - "8080:8080"
     depends_on:
@@ -125,14 +155,19 @@ services:
         condition: service_healthy
       eureka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://configserver:8888
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka:8761/eureka/
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      <<: *common-env
+      SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
     networks:
       - fitness-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      <<: *jvm-healthcheck
 
-  # ─────────────────────── Microservices ───────────────────────
+  # ─────────────────────── Microservices (backend profile) ───────────────────────
 
   userservice:
     build:
@@ -140,24 +175,30 @@ services:
       dockerfile: Dockerfile
     container_name: fitness-userservice
     restart: unless-stopped
+    profiles: ["backend", "full"]
     ports:
       - "8081:8081"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       configserver:
         condition: service_healthy
       eureka:
         condition: service_healthy
     environment:
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://configserver:8888
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka:8761/eureka/
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/fitness_user_db
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=admin@123
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      <<: *common-env
+      SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fitness_user_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-admin@123}
     networks:
       - fitness-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      <<: *jvm-healthcheck
 
   activityservice:
     build:
@@ -165,6 +206,7 @@ services:
       dockerfile: Dockerfile
     container_name: fitness-activityservice
     restart: unless-stopped
+    profiles: ["backend", "full"]
     ports:
       - "8082:8082"
     depends_on:
@@ -177,12 +219,15 @@ services:
       eureka:
         condition: service_healthy
     environment:
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://configserver:8888
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka:8761/eureka/
-      - SPRING_DATA_MONGODB_URI=mongodb://root:rootpassword@mongodb:27017/fitnessactivity?authSource=admin
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      <<: *common-env
+      SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpassword@mongodb:27017/fitnessactivity?authSource=admin
     networks:
       - fitness-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/actuator/health || exit 1"]
+      <<: *jvm-healthcheck
 
   aiservice:
     build:
@@ -190,6 +235,7 @@ services:
       dockerfile: Dockerfile
     container_name: fitness-aiservice
     restart: unless-stopped
+    profiles: ["backend", "full"]
     ports:
       - "8083:8083"
     depends_on:
@@ -202,16 +248,17 @@ services:
       eureka:
         condition: service_healthy
     environment:
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://configserver:8888
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka:8761/eureka/
-      - SPRING_DATA_MONGODB_URI=mongodb://root:rootpassword@mongodb:27017/fitnessrecommendation?authSource=admin
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_API_URL=${GEMINI_API_URL}
+      <<: *common-env
+      SPRING_CONFIG_IMPORT: optional:configserver:http://configserver:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpassword@mongodb:27017/fitnessrecommendation?authSource=admin
     networks:
       - fitness-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health || exit 1"]
+      <<: *jvm-healthcheck
 
-  # ─────────────────────── Frontend ───────────────────────
+  # ─────────────────────── Frontend (full profile) ───────────────────────
 
   frontend:
     build:
@@ -219,6 +266,7 @@ services:
       dockerfile: Dockerfile
     container_name: fitness-frontend
     restart: unless-stopped
+    profiles: ["full"]
     ports:
       - "5173:80"
     depends_on:
@@ -229,3 +277,4 @@ services:
 volumes:
   mongo-data:
   postgres-data:
+  redis-data:

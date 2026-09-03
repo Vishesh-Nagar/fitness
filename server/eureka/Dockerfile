@@ -1,22 +1,22 @@
-# ── Stage 1: build ──────────────────────────────────────────────
-FROM eclipse-temurin:23-jdk-alpine AS builder
+# Build context must be server/
+# docker build -f eureka/Dockerfile -t fitness-eureka .
+FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -q
+COPY eureka/pom.xml ./eureka/pom.xml
+COPY eureka/src ./eureka/src
 
-COPY src ./src
-RUN ./mvnw package -DskipTests -q
+RUN chmod +x mvnw && ./mvnw package -pl eureka -am -DskipTests -q
 
-# ── Stage 2: runtime ────────────────────────────────────────────
-FROM eclipse-temurin:23-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-COPY --from=builder /app/target/*.jar app.jar
+COPY --from=builder /app/eureka/target/*.jar app.jar
 
 EXPOSE 8761
 ENTRYPOINT ["java", "-jar", "app.jar"]
