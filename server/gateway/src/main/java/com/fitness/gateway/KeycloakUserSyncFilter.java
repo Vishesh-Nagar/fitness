@@ -7,6 +7,7 @@ import com.nimbusds.jwt.SignedJWT;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
@@ -20,7 +21,8 @@ public class KeycloakUserSyncFilter implements WebFilter {
     private final UserService userService;
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+    @SuppressWarnings("null")
+    public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull WebFilterChain chain) {
         String token = exchange.getRequest().getHeaders().getFirst("Authorization");
         String userId = exchange.getRequest().getHeaders().getFirst("X-User-ID");
         RegisterRequest registerRequest = getUserDetails(token);

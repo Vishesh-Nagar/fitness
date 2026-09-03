@@ -5,13 +5,11 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
-
-import javax.crypto.SecretKey;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -19,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import javax.crypto.SecretKey;
 import java.util.List;
 
 @Component
@@ -26,15 +25,20 @@ import java.util.List;
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final SecretKey signingKey;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
 
-    // Paths that don't require a token (login, register)
+    // Paths that don't require a token (login, register, actuator)
     private static final List<String> PUBLIC_PATHS = List.of(
             "/api/auth/login",
-            "/api/auth/register"
+            "/api/auth/register",
+            "/actuator"
     );
 
-    public JwtAuthenticationFilter(@Value("${jwt.secret}") String secret) {
+    public JwtAuthenticationFilter(
+            @Value("${jwt.secret}") String secret,
+            ReactiveRedisTemplate<String, String> redisTemplate) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
+        this.redisTemplate = redisTemplate;
     }
 
     @Override
@@ -53,27 +57,39 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         String token = authHeader.substring(7);
-        try {
-            Claims claims = Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
 
-            // Extract userId (subject) and propagate as X-User-ID header —
-            String userId = claims.getSubject();
-            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                    .header("X-User-ID", userId)
-                    .build();
+        // Check Redis blocklist first (logout tokens)
+        return redisTemplate.hasKey("blocklist:" + token)
+                .defaultIfEmpty(false)
+                .flatMap(isBlocklisted -> {
+                    if (Boolean.TRUE.equals(isBlocklisted)) {
+                        log.warn("Blocked (logged-out) token used for path: {}", path);
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    }
 
-            log.debug("JWT valid for userId={}, routing request to {}", userId, path);
-            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                    try {
+                        Claims claims = Jwts.parser()
+                                .verifyWith(signingKey)
+                                .build()
+                                .parseSignedClaims(token)
+                                .getPayload();
 
-        } catch (JwtException e) {
-            log.warn("Invalid JWT token: {}", e.getMessage());
-            exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-            return exchange.getResponse().setComplete();
-        }
+                        // Propagate userId as X-User-ID header
+                        String userId = claims.getSubject();
+                        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                                .header("X-User-ID", userId)
+                                .build();
+
+                        log.debug("JWT valid for userId={}, routing to {}", userId, path);
+                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+
+                    } catch (JwtException e) {
+                        log.warn("Invalid JWT token: {}", e.getMessage());
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    }
+                });
     }
 
     @Override
