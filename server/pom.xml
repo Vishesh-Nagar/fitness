@@ -54,21 +54,7 @@
 		</dependencies>
 	</dependencyManagement>
 
-	<build>
-		<pluginManagement>
-			<plugins>
-				<!-- Upgrade compiler plugin to 3.14.0 — required for Java 25 support -->
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-compiler-plugin</artifactId>
-					<version>3.14.0</version>
-					<configuration>
-						<release>21</release>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
-	</build>
+
 
 </project>
 
