@@ -3,6 +3,9 @@ spring:
     name: ai-service
   config:
     import: optional:configserver:http://localhost:8888
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://root:rootpassword@localhost:27017/fitnessrecommendation?authSource=admin}
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -11,12 +14,15 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
     consumer:
+      group-id: ai-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
-
       properties:
-        spring:
-          json:
-            trusted:
-              packages: com.fitness.*
+        spring.json.trusted.packages: "com.fitness.*"
+        spring.json.value.default.type: com.fitness.common.event.ActivityEvent
+
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:}
+    url: ${GEMINI_API_URL:https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent}

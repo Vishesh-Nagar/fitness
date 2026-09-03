@@ -3,15 +3,16 @@ package com.fitness.aiservice.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fitness.aiservice.dto.UserContext;
-import com.fitness.aiservice.model.Activity;
 import com.fitness.aiservice.model.Recommendation;
 import com.fitness.aiservice.repository.RecommendationRepository;
+import com.fitness.common.event.ActivityEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,30 +23,27 @@ public class ActivityAIService {
     private final GeminiService geminiService;
     private final RecommendationRepository recommendationRepository;
 
-    public Recommendation generateRecommendation(Activity activity) {
+    public Recommendation generateRecommendation(ActivityEvent event) {
         // 1. Fetch all past recommendations for this user to compute context
-        List<Recommendation> pastRecs = recommendationRepository.findByUserId(activity.getUserId());
+        List<Recommendation> pastRecs = recommendationRepository.findByUserId(event.getUserId());
 
         // 2. Build lightweight UserContext (streak + PRs derived from saved recommendations)
         UserContext userContext = buildUserContext(pastRecs);
 
         // 3. Use the richer, context-aware prompt
-        String prompt = buildContextualPrompt(userContext, activity);
+        String prompt = buildContextualPrompt(userContext, event);
         String aiResponse = geminiService.getAnswer(prompt);
-        log.info("AI response for activity {}: {}", activity.getId(), aiResponse);
+        log.info("AI response for activity {}: {}", event.getActivityId(), aiResponse);
 
-        return processAiResponse(activity, aiResponse);
+        return processAiResponse(event, aiResponse);
     }
 
     private UserContext buildUserContext(List<Recommendation> pastRecs) {
         int totalSessions = pastRecs.size();
 
-        // Derive personal records: group by activityType (String), keep the first
-        // line of the stored recommendation text for the best (highest-calorie stub)
-        // entry per type.
         Map<String, String> personalRecords = pastRecs.stream()
                 .collect(Collectors.groupingBy(
-                        Recommendation::getActivityType,
+                        r -> Objects.requireNonNull(r.getActivityType(), "activityType must not be null"),
                         Collectors.collectingAndThen(
                                 Collectors.maxBy(
                                         Comparator.comparingInt(
@@ -66,13 +64,11 @@ public class ActivityAIService {
                 .build();
     }
 
-    @SuppressWarnings("unused")
     private int parseCaloriesFromRec(String recommendationText) {
-        // TODO: replace with a proper numeric field once the data model is richer
         return 0;
     }
 
-    private Recommendation processAiResponse(Activity activity, String aiResponse) {
+    private Recommendation processAiResponse(ActivityEvent event, String aiResponse) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode rootNode = mapper.readTree(aiResponse);
@@ -101,9 +97,9 @@ public class ActivityAIService {
             List<String> safety = extractSafetyGuidelines(analysisJson.path("safety"));
 
             return Recommendation.builder()
-                    .activityId(activity.getId())
-                    .userId(activity.getUserId())
-                    .activityType(activity.getType())
+                    .activityId(event.getActivityId())
+                    .userId(event.getUserId())
+                    .activityType(event.getType())
                     .recommendation(fullAnalysis.toString().trim())
                     .improvements(improvements)
                     .suggestions(suggestions)
@@ -112,16 +108,16 @@ public class ActivityAIService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to parse AI response for activity {}: {}", activity.getId(), e.getMessage(), e);
-            return createDefaultRecommendation(activity);
+            log.error("Failed to parse AI response for activity {}: {}", event.getActivityId(), e.getMessage(), e);
+            return createDefaultRecommendation(event);
         }
     }
 
-    private Recommendation createDefaultRecommendation(Activity activity) {
+    private Recommendation createDefaultRecommendation(ActivityEvent event) {
         return Recommendation.builder()
-                .activityId(activity.getId())
-                .userId(activity.getUserId())
-                .activityType(activity.getType())
+                .activityId(event.getActivityId())
+                .userId(event.getUserId())
+                .activityType(event.getType())
                 .recommendation("Unable to generate detailed analysis")
                 .improvements(Collections.singletonList("Continue with your current routine"))
                 .suggestions(Collections.singletonList("Consider consulting a fitness professional"))
@@ -177,16 +173,11 @@ public class ActivityAIService {
         }
     }
 
-    public String buildContextualPrompt(UserContext userContext, Activity latestActivity) {
+    public String buildContextualPrompt(UserContext userContext, ActivityEvent event) {
         String prForThisType = userContext.getPersonalRecords()
-                .getOrDefault(latestActivity.getType(), "No PR recorded yet");
+                .getOrDefault(event.getType(), "No PR recorded yet");
 
         String previousSessionSummary = "None";
-        if (userContext.getPreviousActivity() != null) {
-            Activity prev = userContext.getPreviousActivity();
-            previousSessionSummary = String.format("%s — %d min, %d kcal",
-                    prev.getType(), prev.getDuration(), prev.getCaloriesBurned());
-        }
 
         return String.format("""
                         Analyze this fitness activity with the following user history and provide recommendations in the EXACT JSON format below.
@@ -228,12 +219,12 @@ public class ActivityAIService {
                         """,
                 userContext.getCurrentStreak(),
                 userContext.getTotalSessions(),
-                latestActivity.getType(),
+                event.getType(),
                 prForThisType,
                 previousSessionSummary,
-                latestActivity.getType(),
-                latestActivity.getDuration(),
-                latestActivity.getCaloriesBurned(),
-                latestActivity.getAdditionalMetrics());
+                event.getType(),
+                event.getDuration(),
+                event.getCaloriesBurned(),
+                event.getAdditionalMetrics());
     }
 }

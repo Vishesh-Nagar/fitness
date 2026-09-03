@@ -1,6 +1,6 @@
 package com.fitness.aiservice.dto;
 
-import com.fitness.aiservice.model.Activity;
+import com.fitness.common.event.ActivityEvent;
 import lombok.Builder;
 import lombok.Data;
 
@@ -12,5 +12,5 @@ public class UserContext {
     private int currentStreak;
     private int totalSessions;
     private Map<String, String> personalRecords;
-    private Activity previousActivity;
+    private ActivityEvent previousActivity;
 }

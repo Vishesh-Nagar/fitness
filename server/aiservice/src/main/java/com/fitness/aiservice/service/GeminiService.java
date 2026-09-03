@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class GeminiService {
@@ -22,22 +23,20 @@ public class GeminiService {
     }
 
     public String getAnswer(String question) {
-        Map<String, Object> requestBody = Map.of(
+        Map<String, Object> requestBody = Objects.requireNonNull(Map.of(
                 "contents", new Object[] {
                         Map.of("parts", new Object[]{
                                 Map.of("text", question)
                         })
                 }
-        );
+        ), "requestBody must not be null");
 
-        String response = webClient.post()
+        return webClient.post()
                 .uri(geminiApiUrl + geminiApiKey)
                 .header("Content-Type", "application/json")
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(String.class)
                 .block();
-
-        return response;
     }
 }
